@@ -110,7 +110,7 @@ WantedBy=multi-user.target
 `
 
 var kubeadmInitTemplate = template.Must(template.New("kubeadmInitTemplate").Parse(`
-sudo /usr/bin/kubeadm init --config {{.KubeadmConfigFile}} {{if .SkipPreflightChecks}}--skip-preflight-checks{{else}}{{range .Preflights}}--ignore-preflight-errors={{.}} {{end}}{{end}}
+sudo /usr/bin/kubeadm init --config {{.KubeadmConfigFile}}{{if .SkipPreflightChecks}} --skip-preflight-checks{{else}}{{range .Preflights}} --ignore-preflight-errors={{.}}{{end}}{{end}}{{if .ExtraFlags}} {{.ExtraFlags}}{{end}}
 `))
 
 // printMapInOrder sorts the keys and prints the map in order, combining key

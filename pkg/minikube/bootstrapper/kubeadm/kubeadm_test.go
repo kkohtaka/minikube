@@ -19,9 +19,87 @@ package kubeadm
 import (
 	"testing"
 
+	"github.com/blang/semver"
+	"k8s.io/minikube/pkg/minikube/bootstrapper"
 	"k8s.io/minikube/pkg/minikube/config"
+	"k8s.io/minikube/pkg/minikube/constants"
 	"k8s.io/minikube/pkg/util"
 )
+
+func TestExecuteKubeadmInit(t *testing.T) {
+	tests := []struct {
+		description       string
+		kubernetesVersion semver.Version
+		preflights        []string
+		extraOptions      util.ExtraOptionSlice
+		cmd               string
+	}{
+		{
+			description:       "v1.8",
+			kubernetesVersion: semver.MustParse("1.8.0"),
+			preflights:        constants.Preflights,
+			cmd: `
+sudo /usr/bin/kubeadm init --config /var/lib/kubeadm.yaml --skip-preflight-checks
+`,
+		},
+		{
+			description:       "v1.9 with preflights",
+			kubernetesVersion: semver.MustParse("1.9.0"),
+			preflights:        constants.Preflights,
+			cmd: `
+sudo /usr/bin/kubeadm init --config /var/lib/kubeadm.yaml --ignore-preflight-errors=DirAvailable--etc-kubernetes-manifests --ignore-preflight-errors=DirAvailable--data-minikube --ignore-preflight-errors=Port-10250 --ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-kube-scheduler.yaml --ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-kube-apiserver.yaml --ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-kube-controller-manager.yaml --ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-etcd.yaml --ignore-preflight-errors=Swap --ignore-preflight-errors=CRI
+`,
+		},
+		{
+			description:       "v1.9 with alternative preflights",
+			kubernetesVersion: semver.MustParse("1.9.0"),
+			preflights:        constants.AlternateRuntimePreflights,
+			cmd: `
+sudo /usr/bin/kubeadm init --config /var/lib/kubeadm.yaml --ignore-preflight-errors=DirAvailable--etc-kubernetes-manifests --ignore-preflight-errors=DirAvailable--data-minikube --ignore-preflight-errors=Port-10250 --ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-kube-scheduler.yaml --ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-kube-apiserver.yaml --ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-kube-controller-manager.yaml --ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-etcd.yaml --ignore-preflight-errors=Swap --ignore-preflight-errors=CRI --ignore-preflight-errors=Service-Docker --ignore-preflight-errors=Port-8443 --ignore-preflight-errors=Port-10251 --ignore-preflight-errors=Port-10252 --ignore-preflight-errors=Port-2379
+`,
+		},
+		{
+			description:       "v1.9 with an extra option",
+			kubernetesVersion: semver.MustParse("1.9.0"),
+			preflights:        constants.Preflights,
+			extraOptions: util.ExtraOptionSlice{
+				util.ExtraOption{
+					Component: Kubeadm,
+					Key:       "ignore-preflight-errors",
+					Value:     "Service-Docker,SystemVerification",
+				},
+			},
+			cmd: `
+sudo /usr/bin/kubeadm init --config /var/lib/kubeadm.yaml --ignore-preflight-errors=DirAvailable--etc-kubernetes-manifests --ignore-preflight-errors=DirAvailable--data-minikube --ignore-preflight-errors=Port-10250 --ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-kube-scheduler.yaml --ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-kube-apiserver.yaml --ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-kube-controller-manager.yaml --ignore-preflight-errors=FileAvailable--etc-kubernetes-manifests-etcd.yaml --ignore-preflight-errors=Swap --ignore-preflight-errors=CRI --ignore-preflight-errors=Service-Docker,SystemVerification
+`,
+		},
+		{
+			description:       "with an extra option for other component",
+			kubernetesVersion: semver.MustParse("1.9.0"),
+			extraOptions: util.ExtraOptionSlice{
+				util.ExtraOption{
+					Component: Kubelet,
+					Key:       "foo",
+					Value:     "bar",
+				},
+			},
+			cmd: `
+sudo /usr/bin/kubeadm init --config /var/lib/kubeadm.yaml
+`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			c := bootstrapper.NewFakeCommandRunner()
+			c.SetCommandToOutput(map[string]string{test.cmd: ""})
+			err := executeKubeadmInit(c, test.kubernetesVersion, test.preflights, test.extraOptions)
+			if err != nil {
+				t.Errorf("got unexpected error execute kubeadm init: %v", err)
+			}
+		})
+	}
+}
 
 func TestGenerateConfig(t *testing.T) {
 	tests := []struct {

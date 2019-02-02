@@ -38,6 +38,7 @@ const (
 	Apiserver         = "apiserver"
 	Scheduler         = "scheduler"
 	ControllerManager = "controller-manager"
+	Kubeadm           = "kubeadm"
 )
 
 // ExtraConfigForComponent generates a map of flagname-value pairs for a k8s
@@ -71,6 +72,7 @@ var componentToKubeadmConfigKey = map[string]string{
 	Scheduler:         "schedulerExtraArgs",
 	// The Kubelet is not configured in kubeadm, only in systemd.
 	Kubelet: "",
+	Kubeadm: "",
 }
 
 func NewComponentExtraArgs(opts util.ExtraOptionSlice, version semver.Version, featureGates string) ([]ComponentExtraArgs, error) {

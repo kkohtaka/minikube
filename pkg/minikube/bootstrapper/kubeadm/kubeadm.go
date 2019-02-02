@@ -137,7 +137,6 @@ func (k *KubeadmBootstrapper) StartCluster(k8s config.KubernetesConfig) error {
 		return errors.Wrap(err, "parsing kubernetes version")
 	}
 
-	b := bytes.Buffer{}
 	preflights := constants.Preflights
 	if k8s.ContainerRuntime != "" {
 		preflights = constants.AlternateRuntimePreflights
@@ -153,24 +152,8 @@ func (k *KubeadmBootstrapper) StartCluster(k8s config.KubernetesConfig) error {
 		}
 	}
 
-	templateContext := struct {
-		KubeadmConfigFile   string
-		SkipPreflightChecks bool
-		Preflights          []string
-	}{
-		KubeadmConfigFile: constants.KubeadmConfigFile,
-		SkipPreflightChecks: !VersionIsBetween(version,
-			semver.MustParse("1.9.0-alpha.0"),
-			semver.Version{}),
-		Preflights: preflights,
-	}
-	if err := kubeadmInitTemplate.Execute(&b, templateContext); err != nil {
+	if err := executeKubeadmInit(k.c, version, preflights, k8s.ExtraOptions); err != nil {
 		return err
-	}
-
-	out, err := k.c.CombinedOutput(b.String())
-	if err != nil {
-		return errors.Wrapf(err, "kubeadm init: %s\n%s\n", b.String(), out)
 	}
 
 	if version.LT(semver.MustParse("1.10.0-alpha.0")) {
@@ -185,6 +168,43 @@ func (k *KubeadmBootstrapper) StartCluster(k8s config.KubernetesConfig) error {
 		return errors.Wrap(err, "timed out waiting to elevate kube-system RBAC privileges")
 	}
 
+	return nil
+}
+
+func executeKubeadmInit(
+	c bootstrapper.CommandRunner,
+	version semver.Version,
+	preflights []string,
+	extraOptions util.ExtraOptionSlice,
+) error {
+	extraArgs, err := ExtraConfigForComponent(Kubeadm, extraOptions, version)
+	if err != nil {
+		return errors.Wrap(err, "generating extra config for kubeadm")
+	}
+	extraFlags := convertToFlags(extraArgs)
+
+	templateContext := struct {
+		KubeadmConfigFile   string
+		SkipPreflightChecks bool
+		Preflights          []string
+		ExtraFlags          string
+	}{
+		KubeadmConfigFile: constants.KubeadmConfigFile,
+		SkipPreflightChecks: !VersionIsBetween(version,
+			semver.MustParse("1.9.0-alpha.0"),
+			semver.Version{}),
+		Preflights: preflights,
+		ExtraFlags: extraFlags,
+	}
+	b := bytes.Buffer{}
+	if err := kubeadmInitTemplate.Execute(&b, templateContext); err != nil {
+		return err
+	}
+
+	out, err := c.CombinedOutput(b.String())
+	if err != nil {
+		return errors.Wrapf(err, "kubeadm init: %s\n%s\n", b.String(), out)
+	}
 	return nil
 }
 
